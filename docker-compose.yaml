@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:17
     container_name: task-management-postgres
     environment:
       POSTGRES_DB: task_management
@@ -12,5 +12,5 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  postgres-data:
+  postgres_data:
   
