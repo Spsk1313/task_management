@@ -1,0 +1,7 @@
+package com.spsk1313.task_management.dto;
+
+public record UserResponse(
+        Long id,
+        String name,
+        String email
+) {}
