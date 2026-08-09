@@ -1,8 +1,7 @@
 package com.spsk1313.task_management.controller;
 
 import com.spsk1313.task_management.dto.ApiErrorResponse;
-import com.spsk1313.task_management.exception.DuplicateEmailException;
-import com.spsk1313.task_management.exception.UserNotFoundException;
+import com.spsk1313.task_management.exception.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -54,5 +53,47 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(ProjectNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleProjectNotFound(
+            ProjectNotFoundException ex
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.NOT_FOUND.getReasonPhrase(),
+                ex.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @ExceptionHandler(DuplicateProjectNameException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateProjectName(
+            DuplicateProjectNameException ex
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                ex.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(OperationForbiddenException.class)
+    public ResponseEntity<ApiErrorResponse> handleOperationForbidden(
+            OperationForbiddenException ex
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 }
