@@ -57,14 +57,29 @@ public class ProjectService {
         return toResponse(project);
     }
 
-    public ProjectResponse updateProject(UpdateProjectRequest req, Long id) {
-        Project project = projectRepository.findById(id).orElseThrow(() -> new ProjectNotFoundException(id));
+    public ProjectResponse updateProject(
+            Long ownerId,
+            Long projectId,
+            UpdateProjectRequest req
+    ) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ProjectNotFoundException(projectId));
+
         User owner = project.getOwner();
+
+        if (!Objects.equals(owner.getId(), ownerId)) {
+            throw new OperationForbiddenException();
+        }
 
         String normalizedName = req.name().trim();
 
-        if (projectRepository.existsByOwner_IdAndNameAndIdNot(owner.getId(), normalizedName, project.getId()))
+        if (projectRepository.existsByOwner_IdAndNameAndIdNot(
+                owner.getId(),
+                normalizedName,
+                project.getId()
+        )) {
             throw new DuplicateProjectNameException(normalizedName);
+        }
 
         project.changeName(normalizedName);
         project.changeDescription(req.description());

@@ -222,13 +222,10 @@ class ProjectServiceTest {
         )).thenReturn(false);
 
         ProjectResponse response =
-                projectService.updateProject(request, 10L);
+                projectService.updateProject(1L, 10L, request);
 
-        verify(project)
-                .changeName("Updated Project");
-
-        verify(project)
-                .changeDescription("Updated description");
+        verify(project).changeName("Updated Project");
+        verify(project).changeDescription("Updated description");
 
         assertEquals("Updated Project", response.name());
         assertEquals("Updated description", response.description());
@@ -247,8 +244,41 @@ class ProjectServiceTest {
 
         assertThrows(
                 ProjectNotFoundException.class,
-                () -> projectService.updateProject(request, 10L)
+                () -> projectService.updateProject(1L, 10L, request)
         );
+    }
+
+    @Test
+    void updateProject_shouldThrow_whenOwnerDoesNotMatch() {
+        UpdateProjectRequest request =
+                new UpdateProjectRequest(
+                        "Updated Project",
+                        "Updated description"
+                );
+
+        User owner = mock(User.class);
+        Project project = mock(Project.class);
+
+        when(owner.getId()).thenReturn(1L);
+        when(project.getOwner()).thenReturn(owner);
+
+        when(projectRepository.findById(10L))
+                .thenReturn(Optional.of(project));
+
+        assertThrows(
+                OperationForbiddenException.class,
+                () -> projectService.updateProject(999L, 10L, request)
+        );
+
+        verify(project, never()).changeName(anyString());
+        verify(project, never()).changeDescription(any());
+
+        verify(projectRepository, never())
+                .existsByOwner_IdAndNameAndIdNot(
+                        any(),
+                        anyString(),
+                        any()
+                );
     }
 
     @Test
@@ -278,14 +308,11 @@ class ProjectServiceTest {
 
         assertThrows(
                 DuplicateProjectNameException.class,
-                () -> projectService.updateProject(request, 10L)
+                () -> projectService.updateProject(1L, 10L, request)
         );
 
-        verify(project, never())
-                .changeName(anyString());
-
-        verify(project, never())
-                .changeDescription(any());
+        verify(project, never()).changeName(anyString());
+        verify(project, never()).changeDescription(any());
     }
 
     @Test
