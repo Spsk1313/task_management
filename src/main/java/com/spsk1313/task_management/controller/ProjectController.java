@@ -4,6 +4,7 @@ import com.spsk1313.task_management.dto.CreateProjectRequest;
 import com.spsk1313.task_management.dto.ProjectResponse;
 import com.spsk1313.task_management.dto.UpdateProjectRequest;
 import com.spsk1313.task_management.service.ProjectService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/projects")
+@Tag(
+        name = "Projects",
+        description = "Manage projects and project ownership"
+)
 public class ProjectController {
 
     private final ProjectService projectService;
