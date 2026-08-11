@@ -9,6 +9,7 @@ import com.spsk1313.task_management.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -51,7 +52,7 @@ public class TaskController {
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) TaskPriority priority,
             @RequestParam(required = false) String search,
-            Pageable pageable
+            @ParameterObject Pageable pageable
     ) {
         Page<TaskResponse> response = taskService.getTasks(projectId, status, priority, search, pageable);
         return ResponseEntity.ok(response);
