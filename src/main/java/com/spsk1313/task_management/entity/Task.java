@@ -7,6 +7,8 @@ import org.hibernate.dialect.type.PostgreSQLEnumJdbcType;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "tasks")
@@ -27,6 +29,14 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "task_tags",
+            joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private Set<Tag> tags = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @JdbcType(PostgreSQLEnumJdbcType.class)
@@ -140,6 +150,21 @@ public class Task {
         this.dueDate = dueDate;
     }
 
+    public void addTag(Tag tag) {
+        if (tag == null) {
+            throw new IllegalArgumentException("Tag cannot be null");
+        }
+        tags.add(tag);
+    }
+
+    public void removeTag(Tag tag) {
+        if (tag == null) {
+            throw new IllegalArgumentException("Tag cannot be null");
+        }
+
+        tags.remove(tag);
+    }
+
     private static void validateTitle(String title) {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException(
@@ -180,6 +205,14 @@ public class Task {
         }
     }
 
+    public boolean hasTag(String tagName) {
+        if (tagName == null) return false;
+
+        return tags
+                .stream()
+                .anyMatch(tag -> tag.getName().equals(tagName));
+    }
+
     public Long getId() {
         return id;
     }
@@ -194,6 +227,10 @@ public class Task {
 
     public Project getProject() {
         return project;
+    }
+
+    public Set<Tag> getTags() {
+        return Set.copyOf(tags);
     }
 
     public TaskPriority getPriority() {
