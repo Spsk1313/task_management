@@ -1,5 +1,6 @@
 package com.spsk1313.task_management.entity;
 
+import com.spsk1313.task_management.exception.InvalidTaskStatusTransitionException;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcType;
 import org.hibernate.dialect.type.PostgreSQLEnumJdbcType;
@@ -57,15 +58,14 @@ public class Task {
             String description,
             Project project,
             TaskPriority priority,
-            TaskStatus status,
             LocalDate dueDate
     ) {
         changeTitle(title);
         changeDescription(description);
         changeProject(project);
         changePriority(priority);
-        changeStatus(status);
         changeDueDate(dueDate);
+        this.status = TaskStatus.TODO;
     }
 
     @PrePersist
@@ -99,15 +99,38 @@ public class Task {
         this.priority = priority;
     }
 
-    public void changeStatus(TaskStatus status) {
-        validateStatus(status);
+    public void changeStatus(TaskStatus newStatus) {
+        validateStatus(newStatus);
 
-        this.status = status;
+        if (this.status == newStatus) {
+            return;
+        }
 
-        if (status == TaskStatus.DONE) {
-            if (this.completedAt == null) {
-                this.completedAt = Instant.now();
-            }
+        boolean validTransition = switch (this.status) {
+            case TODO -> newStatus == TaskStatus.IN_PROGRESS ||
+                    newStatus == TaskStatus.DONE;
+
+            case IN_PROGRESS -> newStatus == TaskStatus.TODO ||
+                    newStatus == TaskStatus.BLOCKED ||
+                    newStatus == TaskStatus.DONE;
+
+            case BLOCKED -> newStatus == TaskStatus.TODO ||
+                    newStatus == TaskStatus.IN_PROGRESS;
+
+            case DONE -> newStatus == TaskStatus.IN_PROGRESS;
+        };
+
+        if (!validTransition) {
+            throw new InvalidTaskStatusTransitionException(
+                    this.status,
+                    newStatus
+            );
+        }
+
+        this.status = newStatus;
+
+        if (newStatus == TaskStatus.DONE) {
+            this.completedAt = Instant.now();
         } else {
             this.completedAt = null;
         }
