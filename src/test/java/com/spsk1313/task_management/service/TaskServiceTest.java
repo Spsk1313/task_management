@@ -1,13 +1,16 @@
 package com.spsk1313.task_management.service;
 
+import com.spsk1313.task_management.dto.AddTagRequest;
 import com.spsk1313.task_management.dto.CreateTaskRequest;
 import com.spsk1313.task_management.dto.TaskResponse;
 import com.spsk1313.task_management.dto.UpdateTaskRequest;
 import com.spsk1313.task_management.entity.*;
+import com.spsk1313.task_management.exception.DuplicateTaskTagException;
 import com.spsk1313.task_management.exception.InvalidTaskStatusTransitionException;
 import com.spsk1313.task_management.exception.ProjectNotFoundException;
 import com.spsk1313.task_management.exception.TaskNotFoundException;
 import com.spsk1313.task_management.repository.ProjectRepository;
+import com.spsk1313.task_management.repository.TagRepository;
 import com.spsk1313.task_management.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,12 +26,15 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class TaskServiceTest {
 
     private TaskRepository taskRepository;
     private ProjectRepository projectRepository;
+    private TagRepository tagRepository;
+
     private TaskService taskService;
 
     private User owner;
@@ -38,10 +44,12 @@ class TaskServiceTest {
     void setUp() {
         taskRepository = mock(TaskRepository.class);
         projectRepository = mock(ProjectRepository.class);
+        tagRepository = mock(TagRepository.class);
 
         taskService = new TaskService(
                 taskRepository,
-                projectRepository
+                projectRepository,
+                tagRepository
         );
 
         owner = new User(
@@ -56,9 +64,13 @@ class TaskServiceTest {
         );
     }
 
+    // ----------------------------------------------------------------
+    // CREATE TASK
+    // ----------------------------------------------------------------
+
     @Test
     void createTask_shouldCreateTask_whenProjectExists() {
-        CreateTaskRequest req = new CreateTaskRequest(
+        CreateTaskRequest request = new CreateTaskRequest(
                 "Build API",
                 "Implement task API",
                 TaskPriority.HIGH,
@@ -69,7 +81,7 @@ class TaskServiceTest {
                 .thenReturn(Optional.of(project));
 
         TaskResponse response =
-                taskService.createTask(1L, req);
+                taskService.createTask(1L, request);
 
         assertEquals("Build API", response.title());
         assertEquals(
@@ -78,14 +90,19 @@ class TaskServiceTest {
         );
         assertEquals(TaskPriority.HIGH, response.priority());
         assertEquals(TaskStatus.TODO, response.status());
+        assertEquals(
+                LocalDate.of(2026, 8, 20),
+                response.dueDate()
+        );
         assertNull(response.completedAt());
+        assertTrue(response.tags().isEmpty());
 
         verify(taskRepository).save(any(Task.class));
     }
 
     @Test
     void createTask_shouldThrow_whenProjectDoesNotExist() {
-        CreateTaskRequest req = new CreateTaskRequest(
+        CreateTaskRequest request = new CreateTaskRequest(
                 "Build API",
                 "Description",
                 TaskPriority.HIGH,
@@ -97,11 +114,16 @@ class TaskServiceTest {
 
         assertThrows(
                 ProjectNotFoundException.class,
-                () -> taskService.createTask(999L, req)
+                () -> taskService.createTask(999L, request)
         );
 
-        verify(taskRepository, never()).save(any());
+        verify(taskRepository, never())
+                .save(any(Task.class));
     }
+
+    // ----------------------------------------------------------------
+    // UPDATE TASK
+    // ----------------------------------------------------------------
 
     @Test
     void updateTask_shouldUpdateProvidedFields() {
@@ -113,7 +135,7 @@ class TaskServiceTest {
                 null
         );
 
-        UpdateTaskRequest req = new UpdateTaskRequest(
+        UpdateTaskRequest request = new UpdateTaskRequest(
                 "New title",
                 "New description",
                 TaskPriority.HIGH,
@@ -125,7 +147,7 @@ class TaskServiceTest {
                 .thenReturn(Optional.of(task));
 
         TaskResponse response =
-                taskService.updateTask(1L, req);
+                taskService.updateTask(1L, request);
 
         assertEquals("New title", response.title());
         assertEquals(
@@ -156,7 +178,7 @@ class TaskServiceTest {
                 originalDueDate
         );
 
-        UpdateTaskRequest req = new UpdateTaskRequest(
+        UpdateTaskRequest request = new UpdateTaskRequest(
                 null,
                 null,
                 TaskPriority.HIGH,
@@ -168,7 +190,7 @@ class TaskServiceTest {
                 .thenReturn(Optional.of(task));
 
         TaskResponse response =
-                taskService.updateTask(1L, req);
+                taskService.updateTask(1L, request);
 
         assertEquals(
                 "Original title",
@@ -185,7 +207,7 @@ class TaskServiceTest {
 
     @Test
     void updateTask_shouldThrow_whenTaskDoesNotExist() {
-        UpdateTaskRequest req = new UpdateTaskRequest(
+        UpdateTaskRequest request = new UpdateTaskRequest(
                 "New title",
                 null,
                 null,
@@ -198,21 +220,15 @@ class TaskServiceTest {
 
         assertThrows(
                 TaskNotFoundException.class,
-                () -> taskService.updateTask(999L, req)
+                () -> taskService.updateTask(999L, request)
         );
     }
 
     @Test
     void updateTask_shouldSetCompletedAt_whenTaskBecomesDone() {
-        Task task = new Task(
-                "Task",
-                null,
-                project,
-                TaskPriority.HIGH,
-                null
-        );
+        Task task = createTask();
 
-        UpdateTaskRequest req = new UpdateTaskRequest(
+        UpdateTaskRequest request = new UpdateTaskRequest(
                 null,
                 null,
                 null,
@@ -224,7 +240,7 @@ class TaskServiceTest {
                 .thenReturn(Optional.of(task));
 
         TaskResponse response =
-                taskService.updateTask(1L, req);
+                taskService.updateTask(1L, request);
 
         assertEquals(TaskStatus.DONE, response.status());
         assertNotNull(response.completedAt());
@@ -232,17 +248,13 @@ class TaskServiceTest {
 
     @Test
     void updateTask_shouldClearCompletedAt_whenDoneTaskIsReopened() {
-        Task task = new Task(
-                "Task",
-                null,
-                project,
-                TaskPriority.HIGH,
-                null
-        );
+        Task task = createTask();
 
         task.changeStatus(TaskStatus.DONE);
 
-        UpdateTaskRequest req = new UpdateTaskRequest(
+        assertNotNull(task.getCompletedAt());
+
+        UpdateTaskRequest request = new UpdateTaskRequest(
                 null,
                 null,
                 null,
@@ -254,7 +266,7 @@ class TaskServiceTest {
                 .thenReturn(Optional.of(task));
 
         TaskResponse response =
-                taskService.updateTask(1L, req);
+                taskService.updateTask(1L, request);
 
         assertEquals(
                 TaskStatus.IN_PROGRESS,
@@ -265,18 +277,12 @@ class TaskServiceTest {
 
     @Test
     void updateTask_shouldThrow_whenStatusTransitionIsInvalid() {
-        Task task = new Task(
-                "Task",
-                null,
-                project,
-                TaskPriority.HIGH,
-                null
-        );
+        Task task = createTask();
 
         task.changeStatus(TaskStatus.IN_PROGRESS);
         task.changeStatus(TaskStatus.BLOCKED);
 
-        UpdateTaskRequest req = new UpdateTaskRequest(
+        UpdateTaskRequest request = new UpdateTaskRequest(
                 null,
                 null,
                 null,
@@ -289,21 +295,23 @@ class TaskServiceTest {
 
         assertThrows(
                 InvalidTaskStatusTransitionException.class,
-                () -> taskService.updateTask(1L, req)
+                () -> taskService.updateTask(1L, request)
         );
 
-        assertEquals(TaskStatus.BLOCKED, task.getStatus());
+        assertEquals(
+                TaskStatus.BLOCKED,
+                task.getStatus()
+        );
+        assertNull(task.getCompletedAt());
     }
+
+    // ----------------------------------------------------------------
+    // DELETE TASK
+    // ----------------------------------------------------------------
 
     @Test
     void deleteTask_shouldDeleteTask_whenTaskExists() {
-        Task task = new Task(
-                "Task",
-                null,
-                project,
-                TaskPriority.HIGH,
-                null
-        );
+        Task task = createTask();
 
         when(taskRepository.findById(1L))
                 .thenReturn(Optional.of(task));
@@ -323,8 +331,13 @@ class TaskServiceTest {
                 () -> taskService.deleteTask(999L)
         );
 
-        verify(taskRepository, never()).delete(any(Task.class));
+        verify(taskRepository, never())
+                .delete(any(Task.class));
     }
+
+    // ----------------------------------------------------------------
+    // GET TASKS
+    // ----------------------------------------------------------------
 
     @Test
     void getTasks_shouldReturnPageOfTasks() {
@@ -336,10 +349,14 @@ class TaskServiceTest {
                 null
         );
 
-        Pageable pageable = PageRequest.of(0, 10);
+        Pageable pageable =
+                PageRequest.of(0, 10);
 
-        Page<Task> page =
-                new PageImpl<>(List.of(task), pageable, 1);
+        Page<Task> page = new PageImpl<>(
+                List.of(task),
+                pageable,
+                1
+        );
 
         when(projectRepository.existsById(1L))
                 .thenReturn(true);
@@ -364,14 +381,24 @@ class TaskServiceTest {
         TaskResponse taskResponse =
                 response.getContent().getFirst();
 
-        assertEquals("Build API", taskResponse.title());
-        assertEquals(TaskPriority.HIGH, taskResponse.priority());
-        assertEquals(TaskStatus.TODO, taskResponse.status());
+        assertEquals(
+                "Build API",
+                taskResponse.title()
+        );
+        assertEquals(
+                TaskPriority.HIGH,
+                taskResponse.priority()
+        );
+        assertEquals(
+                TaskStatus.TODO,
+                taskResponse.status()
+        );
     }
 
     @Test
     void getTasks_shouldPassSpecificationAndPageableToRepository() {
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable =
+                PageRequest.of(0, 20);
 
         when(projectRepository.existsById(1L))
                 .thenReturn(true);
@@ -379,7 +406,13 @@ class TaskServiceTest {
         when(taskRepository.findAll(
                 any(Specification.class),
                 eq(pageable)
-        )).thenReturn(Page.empty(pageable));
+        )).thenReturn(
+                new PageImpl<>(
+                        List.of(),
+                        pageable,
+                        0
+                )
+        );
 
         taskService.getTasks(
                 1L,
@@ -397,7 +430,8 @@ class TaskServiceTest {
 
     @Test
     void getTasks_shouldThrow_whenProjectDoesNotExist() {
-        Pageable pageable = PageRequest.of(0, 10);
+        Pageable pageable =
+                PageRequest.of(0, 10);
 
         when(projectRepository.existsById(999L))
                 .thenReturn(false);
@@ -418,5 +452,196 @@ class TaskServiceTest {
                         any(Specification.class),
                         any(Pageable.class)
                 );
+    }
+
+    // ----------------------------------------------------------------
+    // TAGS
+    // ----------------------------------------------------------------
+
+    @Test
+    void addTagToTask_shouldCreateTag_whenTagDoesNotExist() {
+        Task task = createTask();
+
+        AddTagRequest request =
+                new AddTagRequest(" JAVA ");
+
+        when(taskRepository.findById(1L))
+                .thenReturn(Optional.of(task));
+
+        when(tagRepository.findByName("java"))
+                .thenReturn(Optional.empty());
+
+        when(tagRepository.save(any(Tag.class)))
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
+
+        TaskResponse response =
+                taskService.addTagToTask(1L, request);
+
+        verify(tagRepository)
+                .findByName("java");
+
+        verify(tagRepository)
+                .save(any(Tag.class));
+
+        assertEquals(1, response.tags().size());
+        assertTrue(response.tags().contains("java"));
+        assertEquals(1, task.getTags().size());
+    }
+
+    @Test
+    void addTagToTask_shouldReuseExistingTag_whenTagExistsGlobally() {
+        Task task = createTask();
+
+        Tag existingTag = new Tag("java");
+
+        AddTagRequest request =
+                new AddTagRequest(" JAVA ");
+
+        when(taskRepository.findById(1L))
+                .thenReturn(Optional.of(task));
+
+        when(tagRepository.findByName("java"))
+                .thenReturn(Optional.of(existingTag));
+
+        TaskResponse response =
+                taskService.addTagToTask(1L, request);
+
+        verify(tagRepository)
+                .findByName("java");
+
+        verify(tagRepository, never())
+                .save(any(Tag.class));
+
+        assertEquals(1, response.tags().size());
+        assertTrue(response.tags().contains("java"));
+        assertTrue(task.getTags().contains(existingTag));
+    }
+
+    @Test
+    void addTagToTask_shouldNormalizeTagNameBeforeLookup() {
+        Task task = createTask();
+
+        AddTagRequest request =
+                new AddTagRequest("   JaVa   ");
+
+        when(taskRepository.findById(1L))
+                .thenReturn(Optional.of(task));
+
+        when(tagRepository.findByName("java"))
+                .thenReturn(Optional.empty());
+
+        when(tagRepository.save(any(Tag.class)))
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
+
+        TaskResponse response =
+                taskService.addTagToTask(1L, request);
+
+        verify(tagRepository)
+                .findByName("java");
+
+        assertTrue(response.tags().contains("java"));
+    }
+
+    @Test
+    void addTagToTask_shouldThrow_whenTaskDoesNotExist() {
+        AddTagRequest request =
+                new AddTagRequest("java");
+
+        when(taskRepository.findById(999L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                TaskNotFoundException.class,
+                () -> taskService.addTagToTask(
+                        999L,
+                        request
+                )
+        );
+
+        verifyNoInteractions(tagRepository);
+    }
+
+    @Test
+    void addTagToTask_shouldThrow_whenTagAlreadyAttachedToTask() {
+        Task task = createTask();
+
+        Tag existingTag = new Tag("java");
+
+        /*
+         * Attach the canonical Tag first.
+         */
+        task.addTag(existingTag);
+
+        AddTagRequest request =
+                new AddTagRequest(" JAVA ");
+
+        when(taskRepository.findById(1L))
+                .thenReturn(Optional.of(task));
+
+        when(tagRepository.findByName("java"))
+                .thenReturn(Optional.of(existingTag));
+
+        assertThrows(
+                DuplicateTaskTagException.class,
+                () -> taskService.addTagToTask(
+                        1L,
+                        request
+                )
+        );
+
+        assertEquals(1, task.getTags().size());
+
+        verify(tagRepository, never())
+                .save(any(Tag.class));
+    }
+
+    @Test
+    void addTagToTask_shouldAllowDifferentTagsOnSameTask() {
+        Task task = createTask();
+
+        Tag javaTag = new Tag("java");
+        Tag springTag = new Tag("spring");
+
+        when(taskRepository.findById(1L))
+                .thenReturn(Optional.of(task));
+
+        when(tagRepository.findByName("java"))
+                .thenReturn(Optional.of(javaTag));
+
+        when(tagRepository.findByName("spring"))
+                .thenReturn(Optional.of(springTag));
+
+        taskService.addTagToTask(
+                1L,
+                new AddTagRequest("java")
+        );
+
+        TaskResponse response =
+                taskService.addTagToTask(
+                        1L,
+                        new AddTagRequest("spring")
+                );
+
+        assertEquals(2, response.tags().size());
+        assertTrue(response.tags().contains("java"));
+        assertTrue(response.tags().contains("spring"));
+    }
+
+    // ----------------------------------------------------------------
+    // HELPERS
+    // ----------------------------------------------------------------
+
+    private Task createTask() {
+        return new Task(
+                "Task",
+                "Description",
+                project,
+                TaskPriority.HIGH,
+                null
+        );
     }
 }

@@ -82,13 +82,13 @@ public class TaskService {
 
         String normalizedName = req.name().trim().toLowerCase(Locale.ROOT);
 
+        if (task.hasTag(normalizedName)) {
+            throw new DuplicateTaskTagException(taskId, normalizedName);
+        }
+
         Tag tag = tagRepository
                 .findByName(normalizedName)
                 .orElseGet(() -> tagRepository.save(new Tag(normalizedName)));
-
-        if (task.hasTag(tag)) {
-            throw new DuplicateTaskTagException(taskId, normalizedName);
-        }
 
         task.addTag(tag);
 

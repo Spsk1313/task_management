@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -417,7 +418,8 @@ class TaskControllerTest {
                 LocalDate.of(2026, 8, 25),
                 null,
                 null,
-                null
+                null,
+                Set.of()
         );
 
         when(taskService.updateTask(
@@ -643,7 +645,8 @@ class TaskControllerTest {
                 LocalDate.of(2026, 8, 20),
                 null,
                 null,
-                null
+                null,
+                Set.of()
         );
     }
 

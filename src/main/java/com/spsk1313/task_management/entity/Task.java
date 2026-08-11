@@ -8,7 +8,6 @@ import org.hibernate.dialect.type.PostgreSQLEnumJdbcType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -206,14 +205,12 @@ public class Task {
         }
     }
 
-    public boolean hasTag(Tag tag) {
-        if (tag == null) return false;
+    public boolean hasTag(String tagName) {
+        if (tagName == null) return false;
 
         return tags
                 .stream()
-                .anyMatch(existingTag ->
-                        Objects.equals(existingTag.getId(), tag.getId())
-                );
+                .anyMatch(tag -> tag.getName().equals(tagName));
     }
 
     public Long getId() {
